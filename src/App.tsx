@@ -1,47 +1,63 @@
-import "./App.css";
+import { useEffect, useRef, useState } from "react";
 import Gun from "gun";
-import { useEffect, useState } from "react";
+import "gun/lib/open";
 
-const gun = Gun({
-  peers: ["http:localhost:3000/gun"],
-});
+const gun = Gun({ peers: ["http://localhost:3000/gun"] });
 
-const chanName = 'dsafffdafdsfafdsfdsaf12413213';
-function App() {
-  const [txt, setTxt] = useState();
+const App = () => {
+  const [items, setItems] = useState<Array<Object>>([]);
+  const [channelName, setChannelName] = useState<string>("default");
+  const inputRef = useRef<any>();
 
-  useEffect(() => {
-    const chat = gun.get(chanName).once((node) => {
-      console.log(node)
-      if(node == undefined) {
-        gun.get(chanName).put({text: "Write the text here"})
-      } else {
-        console.log("Found Node")
-        setTxt(node.text)
-      }
-    })
-    //chat.put({ text: "test" });
-    chat.on((node) => {
-      // Is called whenever text is updated
-      console.log("Receiving Update");
-      console.log(node);
-      setTxt(node.text);
-    });
-  }, []);
-
-  const updateText = (event: any) => {
-    console.log("Updating Text");
-    console.log(event.target.value);
-    gun.get(chanName).put({ text: event.target.value }); // Edit the value in our db
-    setTxt(event.target.value);
+  const handleSubmit = () => {
+    const name = inputRef?.current?.value;
+    const randomId = `id_${Date.now()}`;
+    gun.get(channelName).get(randomId).put({ name, id: randomId });
+    inputRef.current.value = "";
   };
 
+  const handleDelete = (id: any) => () => {
+    // in Gun you delete by setting the node to null
+    gun.get(channelName).get(id).put(null);
+  };
+
+  useEffect(() => {
+    gun.get(channelName).open((data) => {
+      const items = Object.values(data)
+        // filter out deleted values which will appear as null
+        .filter((item) => !!item);
+
+      // update local state which will be rendered
+      setItems(items as any);
+    });
+
+    return () => {
+      // this is the "unmount" part; we want to stop listening to updates
+      // coming on this stream after the component is unmounted
+      gun.get(channelName).off();
+    };
+  }, [channelName]);
+
   return (
-    <div className="App">
-      <h1>Collaborative Document With GunJS</h1>
-      <textarea value={txt} onChange={updateText} />
+    <div>
+      <div>
+        <h1>Your Channel Code is:</h1>
+        <input />
+        <h1>Add A Link</h1>
+        <input ref={inputRef} />
+        <button onClick={handleSubmit}>Add Link</button>
+        <h3>Total Links: {items.length}</h3>
+        <ul>
+          {items.map((item: any) => (
+            <li key={item.id}>
+              {item.name} ({item.id})
+              <button onClick={handleDelete(item.id)}>X</button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
-}
+};
 
 export default App;
